@@ -250,7 +250,7 @@ pipeline {
                 """
 
                 sh '''
-                    docker compose -f docker-compose.monitoring.yml up -d
+                    docker compose -f docker-compose.monitoring.yml up -d --remove-orphans
                     sleep 10
                 '''
 
