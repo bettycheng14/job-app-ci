@@ -2,81 +2,246 @@
   "title": "Job Application Platform",
   "uid": "job-app-overview",
   "schemaVersion": 38,
-  "version": 1,
-  "refresh": "30s",
-  "time": { "from": "now-1h", "to": "now" },
+  "version": 2,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
   "panels": [
+
     {
       "id": 1,
-      "title": "HTTP Request Rate — Auth Service",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "targets": [
-        {
-          "expr": "rate(http_request_duration_seconds_count{job=\"auth-service\"}[1m])",
-          "legendFormat": "{{method}} {{route}} {{status_code}}"
+      "title": "Auth Service",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "UP",   "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red"   } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red",   "value": null },
+            { "color": "green", "value": 1 }
+          ]},
+          "color": { "mode": "thresholds" }
         }
-      ]
+      },
+      "targets": [{
+        "expr": "up{job=\"auth-service\"}",
+        "legendFormat": "auth-service"
+      }]
     },
+
     {
       "id": 2,
-      "title": "HTTP Request Rate — JobApp Service",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "targets": [
-        {
-          "expr": "rate(http_request_duration_seconds_count{job=\"jobapp-service\"}[1m])",
-          "legendFormat": "{{method}} {{route}} {{status_code}}"
+      "title": "JobApp Service",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "UP",   "color": "green" } } },
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red"   } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red",   "value": null },
+            { "color": "green", "value": 1 }
+          ]},
+          "color": { "mode": "thresholds" }
         }
-      ]
+      },
+      "targets": [{
+        "expr": "up{job=\"jobapp-service\"}",
+        "legendFormat": "jobapp-service"
+      }]
     },
+
     {
       "id": 3,
-      "title": "Error Rate — Auth Service (5xx)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "targets": [
-        {
-          "expr": "rate(http_request_duration_seconds_count{job=\"auth-service\",status_code=~\"5..\"}[1m])",
-          "legendFormat": "{{method}} {{route}}"
+      "title": "Firing Alerts",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "red",   "value": 1 }
+          ]},
+          "color": { "mode": "thresholds" },
+          "unit": "short"
         }
-      ]
+      },
+      "targets": [{
+        "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
+        "legendFormat": "Firing"
+      }]
     },
+
     {
       "id": 4,
-      "title": "Error Rate — JobApp Service (5xx)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "title": "Total Requests / sec",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      },
       "targets": [
         {
-          "expr": "rate(http_request_duration_seconds_count{job=\"jobapp-service\",status_code=~\"5..\"}[1m])",
-          "legendFormat": "{{method}} {{route}}"
+          "expr": "sum(rate(http_request_duration_seconds_count{job=\"auth-service\"}[1m]))",
+          "legendFormat": "auth"
+        },
+        {
+          "expr": "sum(rate(http_request_duration_seconds_count{job=\"jobapp-service\"}[1m]))",
+          "legendFormat": "jobapp"
         }
       ]
     },
+
     {
       "id": 5,
-      "title": "P95 Latency — Auth Service",
+      "title": "HTTP Request Rate — Auth Service",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [{
+        "expr": "rate(http_request_duration_seconds_count{job=\"auth-service\"}[1m])",
+        "legendFormat": "{{method}} {{route}} {{status_code}}"
+      }]
+    },
+
+    {
+      "id": 6,
+      "title": "HTTP Request Rate — JobApp Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [{
+        "expr": "rate(http_request_duration_seconds_count{job=\"jobapp-service\"}[1m])",
+        "legendFormat": "{{method}} {{route}} {{status_code}}"
+      }]
+    },
+
+    {
+      "id": 7,
+      "title": "Error Rate (4xx + 5xx) — Auth Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [{
+        "expr": "rate(http_request_duration_seconds_count{job=\"auth-service\",status_code=~\"[45]..\"}[1m]) / rate(http_request_duration_seconds_count{job=\"auth-service\"}[1m])",
+        "legendFormat": "error rate"
+      }]
+    },
+
+    {
+      "id": 8,
+      "title": "Error Rate (4xx + 5xx) — JobApp Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [{
+        "expr": "rate(http_request_duration_seconds_count{job=\"jobapp-service\",status_code=~\"[45]..\"}[1m]) / rate(http_request_duration_seconds_count{job=\"jobapp-service\"}[1m])",
+        "legendFormat": "error rate"
+      }]
+    },
+
+    {
+      "id": 9,
+      "title": "Response Latency (p50 / p95 / p99) — Auth Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[2m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[2m]))",
           "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[2m]))",
+          "legendFormat": "p99"
         }
       ]
     },
+
     {
-      "id": 6,
-      "title": "P95 Latency — JobApp Service",
+      "id": 10,
+      "title": "Response Latency (p50 / p95 / p99) — JobApp Service",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"jobapp-service\"}[5m]))",
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"jobapp-service\"}[2m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"jobapp-service\"}[2m]))",
           "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"jobapp-service\"}[2m]))",
+          "legendFormat": "p99"
         }
       ]
+    },
+
+    {
+      "id": 11,
+      "title": "Node.js Heap Used — Auth Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [{
+        "expr": "nodejs_heap_size_used_bytes{job=\"auth-service\"}",
+        "legendFormat": "heap used"
+      }]
+    },
+
+    {
+      "id": 12,
+      "title": "Node.js Heap Used — JobApp Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [{
+        "expr": "nodejs_heap_size_used_bytes{job=\"jobapp-service\"}",
+        "legendFormat": "heap used"
+      }]
     }
+
   ]
 }

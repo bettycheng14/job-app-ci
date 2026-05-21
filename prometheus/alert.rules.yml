@@ -1,0 +1,38 @@
+groups:
+  - name: job-app-alerts
+    rules:
+
+      - alert: ServiceDown
+        expr: up{job=~"auth-service|jobapp-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is DOWN"
+          description: "{{ $labels.job }} has been unreachable for more than 30 seconds."
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            rate(http_request_duration_seconds_count{status_code=~"[45]..",job=~"auth-service|jobapp-service"}[2m])
+            /
+            rate(http_request_duration_seconds_count{job=~"auth-service|jobapp-service"}[2m])
+          ) > 0.3
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "{{ $value | humanizePercentage }} of requests are 4xx/5xx on {{ $labels.job }}."
+
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{job=~"auth-service|jobapp-service"}[2m])
+          ) > 0.5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 latency on {{ $labels.job }}"
+          description: "P95 response time is {{ $value | humanizeDuration }} on {{ $labels.job }} (threshold: 500ms)."
