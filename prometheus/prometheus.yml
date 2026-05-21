@@ -5,12 +5,12 @@ global:
 scrape_configs:
   - job_name: 'auth-service'
     static_configs:
-      - targets: ['host.docker.internal:3001']
+      - targets: ['${DEPLOY_HOST}:${PROD_PORT_AUTH}']
     metrics_path: /metrics
 
   - job_name: 'jobapp-service'
     static_configs:
-      - targets: ['host.docker.internal:3002']
+      - targets: ['${DEPLOY_HOST}:${PROD_PORT_JOBAPP}']
     metrics_path: /metrics
 
   - job_name: 'prometheus'

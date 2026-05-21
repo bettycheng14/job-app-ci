@@ -2,8 +2,12 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_USER = 'bettyyyc14'
-        DEPLOY_HOST     = 'host.docker.internal'
+        DOCKER_HUB_USER     = 'bettyyyc14'
+        DEPLOY_HOST         = 'host.docker.internal'
+        STAGING_PORT_AUTH   = '3001'
+        STAGING_PORT_JOBAPP = '3002'
+        PROD_PORT_AUTH      = '4001'
+        PROD_PORT_JOBAPP    = '4002'
     }
 
     options {
@@ -170,7 +174,7 @@ pipeline {
                 sh """
                     echo 'Waiting for MongoDB healthcheck + service startup...'
                     for i in \$(seq 1 18); do
-                        if curl -sf -m 5 http://${DEPLOY_HOST}:3001/health > /dev/null 2>&1; then
+                        if curl -sf -m 5 http://${DEPLOY_HOST}:${STAGING_PORT_AUTH}/health > /dev/null 2>&1; then
                             echo 'auth-service is up'
                             break
                         fi
@@ -178,9 +182,9 @@ pipeline {
                         sleep 5
                     done
 
-                    curl -f -m 10 http://${DEPLOY_HOST}:3001/health \
+                    curl -f -m 10 http://${DEPLOY_HOST}:${STAGING_PORT_AUTH}/health \
                         || (echo 'HEALTH CHECK FAILED: auth-service staging' && exit 1)
-                    curl -f -m 10 http://${DEPLOY_HOST}:3002/health \
+                    curl -f -m 10 http://${DEPLOY_HOST}:${STAGING_PORT_JOBAPP}/health \
                         || (echo 'HEALTH CHECK FAILED: jobapp-service staging' && exit 1)
                     echo 'Staging health checks passed.'
                 """
@@ -232,7 +236,7 @@ pipeline {
                 sh """
                     echo 'Waiting for MongoDB healthcheck + service startup...'
                     for i in \$(seq 1 18); do
-                        if curl -sf -m 5 http://${DEPLOY_HOST}:4001/health > /dev/null 2>&1; then
+                        if curl -sf -m 5 http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/health > /dev/null 2>&1; then
                             echo 'auth-service is up'
                             break
                         fi
@@ -240,9 +244,9 @@ pipeline {
                         sleep 5
                     done
 
-                    curl -f -m 10 http://${DEPLOY_HOST}:4001/health \
+                    curl -f -m 10 http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/health \
                         || (echo 'HEALTH CHECK FAILED: auth-service production' && exit 1)
-                    curl -f -m 10 http://${DEPLOY_HOST}:4002/health \
+                    curl -f -m 10 http://${DEPLOY_HOST}:${PROD_PORT_JOBAPP}/health \
                         || (echo 'HEALTH CHECK FAILED: jobapp-service production' && exit 1)
                     echo 'Production health checks passed.'
                 """
@@ -257,16 +261,20 @@ pipeline {
         // and prints a pipeline summary to the console.
         stage('Monitoring') {
             steps {
-                sh '''
+                sh """
                     if [ -d prometheus/prometheus.yml ]; then
                         rm -rf prometheus/prometheus.yml
                     fi
-                '''
+                    envsubst '\$DEPLOY_HOST \$PROD_PORT_AUTH \$PROD_PORT_JOBAPP' \
+                        < prometheus/prometheus.yml \
+                        > prometheus/prometheus-rendered.yml
+                    mv prometheus/prometheus-rendered.yml prometheus/prometheus.yml
+                """
 
                 sh """
-                    curl -sf http://${DEPLOY_HOST}:4001/metrics > /dev/null \
+                    curl -sf http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/metrics > /dev/null \
                         || (echo 'METRICS UNAVAILABLE: auth-service (prod)' && exit 1)
-                    curl -sf http://${DEPLOY_HOST}:4002/metrics > /dev/null \
+                    curl -sf http://${DEPLOY_HOST}:${PROD_PORT_JOBAPP}/metrics > /dev/null \
                         || (echo 'METRICS UNAVAILABLE: jobapp-service (prod)' && exit 1)
                     echo 'Metrics endpoints verified.'
                 """
