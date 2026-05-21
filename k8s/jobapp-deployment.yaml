@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobapp-service
+  namespace: default
+  labels:
+    app: jobapp-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jobapp-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  template:
+    metadata:
+      labels:
+        app: jobapp-service
+    spec:
+      containers:
+        - name: jobapp-service
+          image: IMAGE_REGISTRY/jobapp-service:IMAGE_TAG
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3002
+          env:
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JOBAPP_PORT
+            - name: MONGO_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JOBAPP_MONGO_URI
+            - name: JWT_EXPIRES_IN
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: JWT_EXPIRES_IN
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+            - name: GCS_BUCKET_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: GCS_BUCKET_NAME
+            # GCS auth via service account key file mounted from app-secrets.
+            # Workload Identity is not available in the Deakin-managed GCP environment.
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /secrets/gcs/key.json
+          volumeMounts:
+            - name: gcs-key
+              mountPath: /secrets/gcs
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+      volumes:
+        - name: gcs-key
+          secret:
+            secretName: app-secrets
+            items:
+              - key: GCS_SERVICE_ACCOUNT_KEY
+                path: key.json

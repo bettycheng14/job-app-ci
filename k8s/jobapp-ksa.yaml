@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jobapp-ksa
+  namespace: default
+  # Workload Identity annotation removed — iam.serviceAccounts.setIamPolicy
+  # is restricted in the Deakin-managed GCP environment.
+  # GCS authentication uses a service account key file via app-secrets instead.

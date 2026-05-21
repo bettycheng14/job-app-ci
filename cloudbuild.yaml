@@ -1,0 +1,145 @@
+
+substitutions:
+  _APP_VERSION: ""                   # blank → SHORT_SHA used at runtime
+  _DOCKER_HUB_USERNAME: "bettyyyc14"
+  _DOCKER_HUB_TOKEN: ""             # Pass via --substitutions at runtime; NEVER store here
+
+steps:
+  # ── Step 0: Resolve effective image tag ──────────────────────────────────
+  # Uses _APP_VERSION if provided (e.g., v1.0.1), otherwise falls back to
+  # the git commit SHORT_SHA for immutable, traceable image tags.
+  - name: "bash"
+    id: compute-tag
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        TAG="${_APP_VERSION}"
+        if [ -z "$$TAG" ]; then
+          TAG="${SHORT_SHA}"
+        fi
+        echo -n "$$TAG" > /workspace/.image_tag
+        echo "Effective image tag: $$TAG"
+
+  # ── Step 1: Authenticate with Docker Hub ─────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: docker-login
+    waitFor: ["compute-tag"]
+    entrypoint: bash
+    args:
+      - -c
+      - echo "${_DOCKER_HUB_TOKEN}" | docker login -u "${_DOCKER_HUB_USERNAME}" --password-stdin
+
+  # ── Step 2a: Build auth-service ──────────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: build-auth
+    waitFor: ["docker-login"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        TAG=$$(cat /workspace/.image_tag)
+        docker build \
+          -t docker.io/${_DOCKER_HUB_USERNAME}/auth-service:$$TAG \
+          -t docker.io/${_DOCKER_HUB_USERNAME}/auth-service:latest \
+          ./auth-service
+
+  # ── Step 2b: Build jobapp-service (parallel with auth) ───────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: build-jobapp
+    waitFor: ["docker-login"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        TAG=$$(cat /workspace/.image_tag)
+        docker build \
+          -t docker.io/${_DOCKER_HUB_USERNAME}/jobapp-service:$$TAG \
+          -t docker.io/${_DOCKER_HUB_USERNAME}/jobapp-service:latest \
+          ./jobapp-service
+
+  # ── Step 2c: Build frontend (parallel with auth & jobapp) ────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: build-frontend
+    waitFor: ["docker-login"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        TAG=$$(cat /workspace/.image_tag)
+        docker build \
+          -t docker.io/${_DOCKER_HUB_USERNAME}/job-app-frontend:$$TAG \
+          -t docker.io/${_DOCKER_HUB_USERNAME}/job-app-frontend:latest \
+          ./frontend
+
+  # ── Step 3a: Push auth-service ───────────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: push-auth
+    waitFor: ["build-auth"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        TAG=$$(cat /workspace/.image_tag)
+        docker push docker.io/${_DOCKER_HUB_USERNAME}/auth-service:$$TAG
+        docker push docker.io/${_DOCKER_HUB_USERNAME}/auth-service:latest
+
+  # ── Step 3b: Push jobapp-service ─────────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: push-jobapp
+    waitFor: ["build-jobapp"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        TAG=$$(cat /workspace/.image_tag)
+        docker push docker.io/${_DOCKER_HUB_USERNAME}/jobapp-service:$$TAG
+        docker push docker.io/${_DOCKER_HUB_USERNAME}/jobapp-service:latest
+
+  # ── Step 3c: Push frontend ───────────────────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: push-frontend
+    waitFor: ["build-frontend"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        TAG=$$(cat /workspace/.image_tag)
+        docker push docker.io/${_DOCKER_HUB_USERNAME}/job-app-frontend:$$TAG
+        docker push docker.io/${_DOCKER_HUB_USERNAME}/job-app-frontend:latest
+
+  # ── Step 4: Patch IMAGE_REGISTRY and IMAGE_TAG placeholders ──────────────
+  # Rewrites literal strings in deployment YAMLs so that deploy.sh applies
+  # images from the correct Docker Hub path with the resolved tag.
+  - name: "bash"
+    id: patch-manifests
+    waitFor: ["push-auth", "push-jobapp", "push-frontend"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        TAG=$$(cat /workspace/.image_tag)
+        REGISTRY="docker.io/${_DOCKER_HUB_USERNAME}"
+        for f in k8s/auth-deployment.yaml k8s/jobapp-deployment.yaml k8s/frontend-deployment.yaml; do
+          sed -i "s|IMAGE_REGISTRY|$$REGISTRY|g" $$f
+          sed -i "s|IMAGE_TAG|$$TAG|g" $$f
+          echo "Patched $$f → $$REGISTRY/<image>:$$TAG"
+        done
+
+  # kubectl apply is intentionally omitted — run ./deploy.sh <tag> locally.
+  # The Cloud Build SA (roles/cloudbuild.builds.builder only) cannot deploy
+  # to GKE in the Deakin-managed GCP environment.
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE   # tolerates extra CLI substitutions
+
+timeout: "1800s"

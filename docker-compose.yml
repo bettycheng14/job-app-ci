@@ -1,0 +1,66 @@
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-net
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      MONGO_URI: mongodb://mongo:27017/auth-db
+      JWT_SECRET: local_dev_secret_change_in_prod
+      JWT_EXPIRES_IN: 7d
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - app-net
+
+  jobapp-service:
+    build: ./jobapp-service
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      MONGO_URI: mongodb://mongo:27017/jobapp-db
+      JWT_SECRET: local_dev_secret_change_in_prod
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - app-net
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - jobapp-service
+    networks:
+      - app-net
+
+volumes:
+  mongo-data:
+  uploads:
+
+networks:
+  app-net:
+    driver: bridge

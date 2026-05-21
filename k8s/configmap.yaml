@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: default
+data:
+  AUTH_PORT: "3001"
+  JOBAPP_PORT: "3002"
+  JWT_EXPIRES_IN: "7d"
+  AUTH_MONGO_URI: "mongodb://mongo-auth.default.svc.cluster.local:27017/auth-db"
+  JOBAPP_MONGO_URI: "mongodb://mongo-jobapp.default.svc.cluster.local:27017/jobapp-db"
+  GCS_BUCKET_NAME: "job-app-storage"

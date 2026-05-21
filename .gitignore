@@ -1,0 +1,8 @@
+node_modules/
+.env
+*.log
+service-account.json
+*.key.json
+dist/
+
+k8s/secrets.yaml
