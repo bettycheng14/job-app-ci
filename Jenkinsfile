@@ -265,10 +265,11 @@ pipeline {
                     if [ -d prometheus/prometheus.yml ]; then
                         rm -rf prometheus/prometheus.yml
                     fi
-                    envsubst '\$DEPLOY_HOST \$PROD_PORT_AUTH \$PROD_PORT_JOBAPP' \
-                        < prometheus/prometheus.yml \
-                        > prometheus/prometheus-rendered.yml
-                    mv prometheus/prometheus-rendered.yml prometheus/prometheus.yml
+                    sed -e 's|\\\${DEPLOY_HOST}|${DEPLOY_HOST}|g' \
+                        -e 's|\\\${PROD_PORT_AUTH}|${PROD_PORT_AUTH}|g' \
+                        -e 's|\\\${PROD_PORT_JOBAPP}|${PROD_PORT_JOBAPP}|g' \
+                        prometheus/prometheus.yml > prometheus/prometheus.rendered.yml
+                    mv prometheus/prometheus.rendered.yml prometheus/prometheus.yml
                 """
 
                 sh """
