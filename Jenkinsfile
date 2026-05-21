@@ -103,11 +103,13 @@ pipeline {
                         echo "=== Scanning auth-service ==="
                         ./sonar-scanner-*/bin/sonar-scanner \
                             -Dproject.settings=auth-service/sonar-project.properties \
+                            -Dsonar.projectBaseDir=auth-service \
                             -Dsonar.token=$SONAR_TOKEN
 
                         echo "=== Scanning jobapp-service ==="
                         ./sonar-scanner-*/bin/sonar-scanner \
                             -Dproject.settings=jobapp-service/sonar-project.properties \
+                            -Dsonar.projectBaseDir=jobapp-service \
                             -Dsonar.token=$SONAR_TOKEN
                     '''
                 }
