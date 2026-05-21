@@ -262,14 +262,11 @@ pipeline {
         stage('Monitoring') {
             steps {
                 sh """
-                    if [ -d prometheus/prometheus.yml ]; then
-                        rm -rf prometheus/prometheus.yml
-                    fi
+                    rm -rf prometheus/prometheus.yml
                     sed -e 's|\\\${DEPLOY_HOST}|${DEPLOY_HOST}|g' \
                         -e 's|\\\${PROD_PORT_AUTH}|${PROD_PORT_AUTH}|g' \
                         -e 's|\\\${PROD_PORT_JOBAPP}|${PROD_PORT_JOBAPP}|g' \
-                        prometheus/prometheus.yml > prometheus/prometheus.rendered.yml
-                    mv prometheus/prometheus.rendered.yml prometheus/prometheus.yml
+                        prometheus/prometheus.template.yml > prometheus/prometheus.yml
                 """
 
                 sh """
@@ -281,7 +278,7 @@ pipeline {
                 """
 
                 sh '''
-                    docker compose -p job-app-monitoring -f docker-compose.monitoring.yml up -d
+                    docker compose -p job-app-monitoring -f docker-compose.monitoring.yml up -d --force-recreate
                     sleep 10
                 '''
 
