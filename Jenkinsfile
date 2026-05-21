@@ -102,30 +102,12 @@ pipeline {
 
                         echo "=== Scanning auth-service ==="
                         ./sonar-scanner-*/bin/sonar-scanner \
-                            -Dsonar.host.url=https://sonarcloud.io \
-                            -Dsonar.organization=bettycheng14 \
-                            -Dsonar.projectKey=bettycheng14_auth-service \
-                            -Dsonar.projectName="Auth Service" \
-                            -Dsonar.projectBaseDir=auth-service \
-                            -Dsonar.sources=src \
-                            -Dsonar.exclusions=src/index.js,src/models/**,node_modules/**,coverage/** \
-                            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                            -Dsonar.qualitygate.wait=true \
-                            -Dsonar.qualitygate.wait.timeout=300 \
+                            -Dproject.settings=auth-service/sonar-project.properties \
                             -Dsonar.token=$SONAR_TOKEN
 
                         echo "=== Scanning jobapp-service ==="
                         ./sonar-scanner-*/bin/sonar-scanner \
-                            -Dsonar.host.url=https://sonarcloud.io \
-                            -Dsonar.organization=bettycheng14 \
-                            -Dsonar.projectKey=bettycheng14_jobapp-service \
-                            -Dsonar.projectName="JobApp Service" \
-                            -Dsonar.projectBaseDir=jobapp-service \
-                            -Dsonar.sources=src \
-                            -Dsonar.exclusions=src/index.js,src/models/**,src/middleware/upload.js,node_modules/**,coverage/** \
-                            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                            -Dsonar.qualitygate.wait=true \
-                            -Dsonar.qualitygate.wait.timeout=300 \
+                            -Dproject.settings=jobapp-service/sonar-project.properties \
                             -Dsonar.token=$SONAR_TOKEN
                     '''
                 }
