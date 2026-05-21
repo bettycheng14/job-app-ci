@@ -151,11 +151,13 @@ pipeline {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     sh """
                         trivy image --severity HIGH,CRITICAL \
+                            --exit-code 0 \
                             --format json \
                             --output trivy-auth-report.json \
                             ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
 
                         trivy image --severity HIGH,CRITICAL \
+                            --exit-code 0 \
                             --format json \
                             --output trivy-jobapp-report.json \
                             ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
