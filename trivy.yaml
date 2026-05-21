@@ -1,0 +1,17 @@
+severity:
+  - HIGH
+  - CRITICAL
+
+# Do not fail on unfixed vulnerabilities (exit code 0 even with findings)
+ignore-unfixed: false
+
+# Output format used in the pipeline
+format: table
+
+# Scan the image filesystem and OS packages
+scanners:
+  - vuln
+  - secret
+
+# Exit code 1 if any HIGH/CRITICAL findings are found
+exit-code: 1

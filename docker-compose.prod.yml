@@ -1,0 +1,69 @@
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo-prod-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: always
+    networks:
+      - prod-net
+
+  auth-service:
+    # Uses pre-built image from Docker Hub; IMAGE_TAG is substituted by the pipeline.
+    image: bettyyyc14/auth-service:${IMAGE_TAG:-latest}
+    ports:
+      - "4001:3001"
+    env_file:
+      - .env.prod
+    environment:
+      PORT: 3001
+      MONGO_URI: mongodb://mongo:27017/auth-db-prod
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - prod-net
+
+  jobapp-service:
+    image: bettyyyc14/jobapp-service:${IMAGE_TAG:-latest}
+    ports:
+      - "4002:3002"
+    env_file:
+      - .env.prod
+    environment:
+      PORT: 3002
+      MONGO_URI: mongodb://mongo:27017/jobapp-db-prod
+    volumes:
+      - uploads-prod:/app/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - prod-net
+
+volumes:
+  mongo-prod-data:
+  uploads-prod:
+
+networks:
+  prod-net:
+    driver: bridge

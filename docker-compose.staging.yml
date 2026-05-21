@@ -1,0 +1,69 @@
+services:
+  mongo:
+    image: mongo:7
+    # Use port 27018 on the host to avoid clashing with any local/dev MongoDB on 27017
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo-staging-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - staging-net
+
+  auth-service:
+    # Stage 1 builds and tags this image; Stage 5 deploys it via IMAGE_TAG env var.
+    image: bettyyyc14/auth-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.staging
+    environment:
+      PORT: 3001
+      MONGO_URI: mongodb://mongo:27017/auth-db-staging
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - staging-net
+
+  jobapp-service:
+    image: bettyyyc14/jobapp-service:${IMAGE_TAG:-latest}
+    ports:
+      - "3002:3002"
+    env_file:
+      - .env.staging
+    environment:
+      PORT: 3002
+      MONGO_URI: mongodb://mongo:27017/jobapp-db-staging
+    volumes:
+      - uploads-staging:/app/uploads
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - staging-net
+
+volumes:
+  mongo-staging-data:
+  uploads-staging:
+
+networks:
+  staging-net:
+    driver: bridge
