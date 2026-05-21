@@ -164,22 +164,30 @@ pipeline {
         stage('Deploy (Staging)') {
             steps {
                 sh """
-                    IMAGE_TAG=${IMAGE_TAG} docker compose -f docker-compose.staging.yml up -d
+                    IMAGE_TAG=${IMAGE_TAG} docker compose -p job-app-staging -f docker-compose.staging.yml up -d
                 """
 
-                sh 'sleep 20'
-
                 sh """
-                    curl -f http://${DEPLOY_HOST}:3001/health \
+                    echo 'Waiting for MongoDB healthcheck + service startup...'
+                    for i in \$(seq 1 18); do
+                        if curl -sf -m 5 http://${DEPLOY_HOST}:3001/health > /dev/null 2>&1; then
+                            echo 'auth-service is up'
+                            break
+                        fi
+                        echo "  attempt \$i/18 — sleeping 5s"
+                        sleep 5
+                    done
+
+                    curl -f -m 10 http://${DEPLOY_HOST}:3001/health \
                         || (echo 'HEALTH CHECK FAILED: auth-service staging' && exit 1)
-                    curl -f http://${DEPLOY_HOST}:3002/health \
+                    curl -f -m 10 http://${DEPLOY_HOST}:3002/health \
                         || (echo 'HEALTH CHECK FAILED: jobapp-service staging' && exit 1)
                     echo 'Staging health checks passed.'
                 """
             }
             post {
                 failure {
-                    sh 'docker compose -f docker-compose.staging.yml logs --tail=50 || true'
+                    sh 'docker compose -p job-app-staging -f docker-compose.staging.yml logs --tail=50 || true'
                     echo 'DEPLOY FAILED — staging health check failed. Container logs printed above.'
                 }
             }
@@ -218,15 +226,23 @@ pipeline {
                 }
 
                 sh """
-                    IMAGE_TAG=${IMAGE_TAG} docker compose -f docker-compose.prod.yml up -d
+                    IMAGE_TAG=${IMAGE_TAG} docker compose -p job-app-prod -f docker-compose.prod.yml up -d
                 """
 
-                sh 'sleep 20'
-
                 sh """
-                    curl -f http://${DEPLOY_HOST}:4001/health \
+                    echo 'Waiting for MongoDB healthcheck + service startup...'
+                    for i in \$(seq 1 18); do
+                        if curl -sf -m 5 http://${DEPLOY_HOST}:4001/health > /dev/null 2>&1; then
+                            echo 'auth-service is up'
+                            break
+                        fi
+                        echo "  attempt \$i/18 — sleeping 5s"
+                        sleep 5
+                    done
+
+                    curl -f -m 10 http://${DEPLOY_HOST}:4001/health \
                         || (echo 'HEALTH CHECK FAILED: auth-service production' && exit 1)
-                    curl -f http://${DEPLOY_HOST}:4002/health \
+                    curl -f -m 10 http://${DEPLOY_HOST}:4002/health \
                         || (echo 'HEALTH CHECK FAILED: jobapp-service production' && exit 1)
                     echo 'Production health checks passed.'
                 """
@@ -250,7 +266,7 @@ pipeline {
                 """
 
                 sh '''
-                    docker compose -f docker-compose.monitoring.yml up -d --remove-orphans
+                    docker compose -p job-app-monitoring -f docker-compose.monitoring.yml up -d
                     sleep 10
                 '''
 
