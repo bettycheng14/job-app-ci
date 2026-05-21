@@ -231,6 +231,14 @@ pipeline {
                 }
 
                 sh """
+                    for port in ${PROD_PORT_AUTH} ${PROD_PORT_JOBAPP}; do
+                        cid=\$(docker ps -q --filter "publish=\${port}")
+                        if [ -n "\$cid" ]; then
+                            echo "Force-stopping container on port \${port}: \$cid"
+                            docker stop "\$cid" || true
+                        fi
+                    done
+
                     IMAGE_TAG=${IMAGE_TAG} docker compose -p job-app-prod -f docker-compose.prod.yml up -d
                 """
 
@@ -265,7 +273,10 @@ pipeline {
         // 6. Recovers the service and prints pipeline summary.
         stage('Monitoring') {
             steps {
-                // ── 7a: generate config ───────────────────────────────
+                // ── 7a: generate config + populate named volumes ─────
+                // Bind mounts from inside the Jenkins container are blocked by
+                // Docker Desktop file-sharing rules. We pipe config content
+                // directly into named external volumes via `docker run -i`.
                 sh """
                     mkdir -p prometheus
                     rm -f prometheus/prometheus.yml
@@ -273,9 +284,26 @@ pipeline {
                         -e 's|\\\${PROD_PORT_AUTH}|${PROD_PORT_AUTH}|g' \
                         -e 's|\\\${PROD_PORT_JOBAPP}|${PROD_PORT_JOBAPP}|g' \
                         prometheus/prometheus.template.yml > prometheus/prometheus.yml
-                    echo '=== Generated prometheus.yml ==='
-                    cat prometheus/prometheus.yml
-                    ls -la prometheus/
+                    echo '=== Generated prometheus.yml ===' && cat prometheus/prometheus.yml
+
+                    docker compose -p job-app-monitoring -f docker-compose.monitoring.yml down --remove-orphans || true
+                    docker volume rm prometheus-cfg grafana-prov 2>/dev/null || true
+                    docker volume create prometheus-cfg
+                    docker volume create grafana-prov
+
+                    cat prometheus/prometheus.yml | docker run --rm -i \
+                        -v prometheus-cfg:/etc/prometheus \
+                        busybox sh -c 'cat > /etc/prometheus/prometheus.yml'
+                    cat prometheus/alert.rules.yml | docker run --rm -i \
+                        -v prometheus-cfg:/etc/prometheus \
+                        busybox sh -c 'cat > /etc/prometheus/alert.rules.yml'
+
+                    tar -C grafana/provisioning -c . | docker run --rm -i \
+                        -v grafana-prov:/etc/grafana/provisioning \
+                        busybox sh -c 'tar -x -C /etc/grafana/provisioning'
+
+                    docker run --rm -v prometheus-cfg:/etc/prometheus busybox ls -la /etc/prometheus/
+                    docker run --rm -v grafana-prov:/etc/grafana/provisioning busybox find /etc/grafana/provisioning -type f
                 """
 
                 // ── 7b: verify /metrics endpoints ────────────────────
@@ -288,9 +316,8 @@ pipeline {
                 """
 
                 // ── 7c: start monitoring stack + wait for readiness ───
-                // Uses double-quotes so \${DEPLOY_HOST} expands correctly.
+                // Volumes were already prepared in 7a; just start the stack.
                 sh """
-                    docker compose -p job-app-monitoring -f docker-compose.monitoring.yml down --remove-orphans || true
                     docker compose -p job-app-monitoring -f docker-compose.monitoring.yml up -d --force-recreate
 
                     echo 'Waiting for Prometheus...'
