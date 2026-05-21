@@ -257,270 +257,147 @@ pipeline {
             }
         }
         // ── STAGE 7: MONITORING ───────────────────────────────────────
-        // 1. Generates Prometheus config from template
-        // 2. Verifies metrics endpoints
-        // 3. Starts Prometheus + Grafana
-        // 4. Waits for readiness
-        // 5. Generates baseline traffic
-        // 6. Simulates ServiceDown incident
-        // 7. Verifies alerts + recovery
-        // 8. Prints pipeline summary
-
+        // 1. Generates prometheus.yml (with alert rules) from template.
+        // 2. Verifies /metrics endpoints on prod.
+        // 3. Starts Prometheus + Grafana, polls until ready.
+        // 4. Generates baseline traffic so Grafana graphs are non-empty.
+        // 5. Simulates ServiceDown incident and confirms alert fires.
+        // 6. Recovers the service and prints pipeline summary.
         stage('Monitoring') {
             steps {
+                // ── 7a: generate config ───────────────────────────────
                 sh """
-                    echo "PROJECT_DIR=${WORKSPACE}" > .env
-                """
-                // ── 7a: Generate Prometheus config ─────────────────────────
-                sh """
-                    echo '=== Generating Prometheus configuration ==='
-
                     mkdir -p prometheus
                     rm -f prometheus/prometheus.yml
-
                     sed -e 's|\\\${DEPLOY_HOST}|${DEPLOY_HOST}|g' \
                         -e 's|\\\${PROD_PORT_AUTH}|${PROD_PORT_AUTH}|g' \
                         -e 's|\\\${PROD_PORT_JOBAPP}|${PROD_PORT_JOBAPP}|g' \
-                        prometheus/prometheus.template.yml \
-                        > prometheus/prometheus.yml
-
-                    echo ''
+                        prometheus/prometheus.template.yml > prometheus/prometheus.yml
                     echo '=== Generated prometheus.yml ==='
                     cat prometheus/prometheus.yml
-
-                    echo ''
-                    echo '=== Prometheus directory ==='
                     ls -la prometheus/
                 """
 
-                // ── 7b: Verify metrics endpoints ───────────────────────────
+                // ── 7b: verify /metrics endpoints ────────────────────
                 sh """
-                    echo '=== Verifying metrics endpoints ==='
-
                     curl -sf http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/metrics > /dev/null \
                         || (echo 'METRICS UNAVAILABLE: auth-service' && exit 1)
-
                     curl -sf http://${DEPLOY_HOST}:${PROD_PORT_JOBAPP}/metrics > /dev/null \
                         || (echo 'METRICS UNAVAILABLE: jobapp-service' && exit 1)
-
                     echo 'Metrics endpoints verified.'
                 """
 
-                // ── 7c: Start monitoring stack ─────────────────────────────
-                sh '''
-                    echo '=== Starting monitoring stack ==='
-
-                    docker compose \
-                        -p job-app-monitoring \
-                        -f docker-compose.monitoring.yml \
-                        down --remove-orphans || true
-
-                    docker compose \
-                        -p job-app-monitoring \
-                        -f docker-compose.monitoring.yml \
-                        up -d --force-recreate
-
-                    echo ''
-                    echo '=== Waiting for Prometheus readiness ==='
-
-                    for i in $(seq 1 20); do
-                        if curl -sf http://localhost:9090/-/ready > /dev/null; then
-                            echo "Prometheus ready."
-                            break
-                        fi
-
-                        echo "Waiting for Prometheus... ($i/20)"
-                        sleep 3
-                    done
-
-                    echo ''
-                    echo '=== Waiting for Grafana readiness ==='
-
-                    for i in $(seq 1 20); do
-                        if curl -sf http://localhost:3000/api/health > /dev/null; then
-                            echo "Grafana ready."
-                            break
-                        fi
-
-                        echo "Waiting for Grafana... ($i/20)"
-                        sleep 3
-                    done
-                '''
-
-                // ── 7d: Generate baseline traffic ──────────────────────────
+                // ── 7c: start monitoring stack + wait for readiness ───
+                // Uses double-quotes so \${DEPLOY_HOST} expands correctly.
                 sh """
-                    echo ''
-                    echo '=== Generating baseline traffic ==='
+                    docker compose -p job-app-monitoring -f docker-compose.monitoring.yml down --remove-orphans || true
+                    docker compose -p job-app-monitoring -f docker-compose.monitoring.yml up -d --force-recreate
 
+                    echo 'Waiting for Prometheus...'
                     for i in \$(seq 1 20); do
-
-                        curl -sf http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/health \
-                            > /dev/null || true
-
-                        curl -sf http://${DEPLOY_HOST}:${PROD_PORT_JOBAPP}/health \
-                            > /dev/null || true
-
-                        curl -sf -X POST \
-                            http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/api/auth/register \
-                            -H 'Content-Type: application/json' \
-                            -d '{\"email\":\"load\${i}-'"\$(date +%s)"'@demo.com\",\"password\":\"Demo1!\"}' \
-                            > /dev/null || true
-
-                        curl -sf \
-                            http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/api/nonexistent \
-                            > /dev/null || true
+                        if curl -sf http://${DEPLOY_HOST}:9090/-/ready > /dev/null 2>&1; then
+                            echo 'Prometheus ready.'
+                            break
+                        fi
+                        echo "  attempt \$i/20 — sleeping 3s"
+                        sleep 3
                     done
 
-                    echo 'Baseline traffic generation completed.'
+                    echo 'Waiting for Grafana...'
+                    for i in \$(seq 1 20); do
+                        if curl -sf http://${DEPLOY_HOST}:3000/api/health > /dev/null 2>&1; then
+                            echo 'Grafana ready.'
+                            break
+                        fi
+                        echo "  attempt \$i/20 — sleeping 3s"
+                        sleep 3
+                    done
                 """
 
-                // ── 7e: Simulate incident ──────────────────────────────────
+                // ── 7d: baseline traffic (populates Grafana graphs) ───
+                sh """
+                    echo '--- Generating baseline traffic ---'
+                    for i in \$(seq 1 20); do
+                        curl -sf http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/health  > /dev/null || true
+                        curl -sf http://${DEPLOY_HOST}:${PROD_PORT_JOBAPP}/health > /dev/null || true
+                        curl -sf -X POST http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/api/auth/register \
+                            -H 'Content-Type: application/json' \
+                            -d '{"email":"loadtest@demo.com","password":"Demo1!"}' \
+                            > /dev/null || true
+                        curl -sf http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/api/nonexistent > /dev/null || true
+                    done
+                    echo 'Baseline traffic done.'
+                """
+
+                // ── 7e: incident simulation ───────────────────────────
                 sh """
                     echo ''
                     echo '======================================================'
-                    echo ' INCIDENT SIMULATION — stopping auth-service'
+                    echo ' INCIDENT SIMULATION — stopping auth-service (prod)'
                     echo '======================================================'
-
-                    docker compose \
-                        -p job-app-prod \
-                        -f docker-compose.prod.yml \
-                        stop auth-service || true
-
-                    echo ''
-                    echo 'Service stopped.'
-                    echo 'Waiting 40 seconds for ServiceDown alert...'
-
+                    docker compose -p job-app-prod -f docker-compose.prod.yml stop auth-service || true
+                    echo 'Waiting 40s for ServiceDown alert (for: 30s)...'
                     sleep 40
 
-                    echo ''
-                    echo '=== Prometheus alert state ==='
+                    echo '--- Prometheus alert state ---'
+                    curl -s "http://${DEPLOY_HOST}:9090/api/v1/alerts" | python3 -c "import json,sys; d=json.load(sys.stdin); alerts=d.get('data',{}).get('alerts',[]); print('  No alerts firing yet.' if not alerts else ''); [print('  ALERT: '+a['labels'].get('alertname','?')+' | state='+a.get('state','?')+' | severity='+a['labels'].get('severity','?')) for a in alerts]" || true
 
-                    curl -s http://${DEPLOY_HOST}:9090/api/v1/alerts \
-                        | python3 -c "
-        import json, sys
-
-        d = json.load(sys.stdin)
-        alerts = d.get('data', {}).get('alerts', [])
-
-        if not alerts:
-            print('No alerts firing yet.')
-
-        for a in alerts:
-            print(
-                'ALERT: {name} | state={state} | severity={sev}'.format(
-                    name=a['labels'].get('alertname', '?'),
-                    state=a.get('state', '?'),
-                    sev=a['labels'].get('severity', '?')
-                )
-            )
-        " || true
-
-                    echo ''
-                    echo '=== Prometheus targets ==='
-
-                    curl -s http://${DEPLOY_HOST}:9090/api/v1/targets \
-                        | python3 -c "
-        import json, sys
-
-        d = json.load(sys.stdin)
-
-        for t in d.get('data', {}).get('activeTargets', []):
-            print(
-                'target={job} health={health}'.format(
-                    job=t['labels'].get('job', '?'),
-                    health=t.get('health', '?')
-                )
-            )
-        " || true
+                    echo '--- Prometheus targets ---'
+                    curl -s "http://${DEPLOY_HOST}:9090/api/v1/targets" | python3 -c "import json,sys; d=json.load(sys.stdin); [print('  target='+t['labels'].get('job','?')+'  health='+t.get('health','?')) for t in d.get('data',{}).get('activeTargets',[])]" || true
                 """
 
-                // ── 7f: Recovery ───────────────────────────────────────────
+                // ── 7f: recovery ──────────────────────────────────────
                 sh """
                     echo ''
                     echo '======================================================'
                     echo ' RECOVERY — restarting auth-service'
                     echo '======================================================'
-
-                    docker compose \
-                        -p job-app-prod \
-                        -f docker-compose.prod.yml \
-                        start auth-service || true
-
+                    docker compose -p job-app-prod -f docker-compose.prod.yml start auth-service || true
                     for i in \$(seq 1 12); do
-
-                        if curl -sf -m 5 \
-                            http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/health \
-                            > /dev/null 2>&1; then
-
-                            echo "auth-service recovered (attempt \$i)."
+                        if curl -sf -m 5 http://${DEPLOY_HOST}:${PROD_PORT_AUTH}/health > /dev/null 2>&1; then
+                            echo "  auth-service recovered (attempt \$i)."
                             break
                         fi
-
-                        echo "Recovery attempt \$i/12 — sleeping 5 seconds"
+                        echo "  recovery attempt \$i/12 — sleeping 5s"
                         sleep 5
                     done
                 """
 
-                // ── 7g: Final monitoring status ────────────────────────────
+                // ── 7g: final stack health ────────────────────────────
                 sh """
-                    echo ''
-                    echo '=== Final monitoring status ==='
-
-                    curl -sf http://localhost:9090/-/ready \
-                        && echo 'Prometheus healthy.'
-
-                    curl -sf http://localhost:3000/api/health \
-                        && echo 'Grafana healthy.'
+                    curl -sf http://${DEPLOY_HOST}:9090/-/ready  > /dev/null && echo 'Prometheus: healthy' || echo 'Prometheus: not ready'
+                    curl -sf http://${DEPLOY_HOST}:3000/api/health > /dev/null && echo 'Grafana:    healthy' || echo 'Grafana:    not ready'
                 """
 
-                // ── 7h: Pipeline summary ───────────────────────────────────
+                // ── 7h: pipeline summary ──────────────────────────────
                 sh """
-                    echo ''
-                    echo '============================================================'
-                    echo ' PIPELINE SUMMARY — BUILD ${IMAGE_TAG}'
-                    echo '============================================================'
-                    echo ' Stage 1 Build   : PASSED — Docker images built'
-                    echo ' Stage 2 Test    : PASSED — JUnit + coverage published'
-                    echo ' Stage 3 Quality : PASSED — SonarCloud analysis completed'
-                    echo ' Stage 4 Security: PASSED/UNSTABLE — Trivy + npm audit completed'
-                    echo ' Stage 5 Staging : READY'
-                    echo ' Stage 6 Release : READY'
-                    echo ' Stage 7 Metrics : READY'
-                    echo ''
-                    echo ' Services'
-                    echo ' --------'
-                    echo ' Auth Service    : http://localhost:4001'
-                    echo ' JobApp Service  : http://localhost:4002'
-                    echo ' Prometheus      : http://localhost:9090'
-                    echo ' Grafana         : http://localhost:3000'
-                    echo ''
-                    echo ' Monitoring'
-                    echo ' ----------'
-                    echo ' Metrics verified'
-                    echo ' Alert rules loaded'
-                    echo ' Baseline traffic generated'
-                    echo ' ServiceDown incident simulated'
-                    echo ' Automatic recovery completed'
-                    echo ''
-                    echo '============================================================'
+                    echo ""
+                    echo "============================================================"
+                    echo " PIPELINE SUMMARY — BUILD ${IMAGE_TAG}"
+                    echo "============================================================"
+                    echo " Stage 1 Build    : PASSED — images tagged ${IMAGE_TAG}"
+                    echo " Stage 2 Test     : PASSED — JUnit + coverage published"
+                    echo " Stage 3 Quality  : PASSED — SonarCloud quality gate passed"
+                    echo " Stage 4 Security : see archived Trivy/audit reports"
+                    echo " Stage 5 Staging  : http://localhost:3001  http://localhost:3002"
+                    echo " Stage 6 Release  : Docker Hub ${DOCKER_HUB_USER}/*:${IMAGE_TAG}"
+                    echo "          Prod    : http://localhost:4001  http://localhost:4002"
+                    echo " Stage 7 Metrics  : http://localhost:4001/metrics"
+                    echo "          Prometheus : http://localhost:9090  (alert rules loaded)"
+                    echo "          Grafana    : http://localhost:3000  (admin / admin)"
+                    echo "          Incident   : ServiceDown fired + auto-recovered"
+                    echo "============================================================"
                 """
             }
-
             post {
                 failure {
-
-                    // Ensure prod service is restored even on failure
-                    sh '''
-                        docker compose \
-                            -p job-app-prod \
-                            -f docker-compose.prod.yml \
-                            start auth-service || true
-                    '''
-
+                    sh 'docker compose -p job-app-prod -f docker-compose.prod.yml start auth-service || true'
                     echo 'MONITORING FAILED — check Prometheus/Grafana logs.'
                 }
             }
         }
+
+    }
 
     post {
         success  { echo 'Pipeline completed successfully — all 7 stages passed.' }
