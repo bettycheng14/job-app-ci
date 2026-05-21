@@ -242,10 +242,10 @@ pipeline {
         stage('Monitoring') {
             steps {
                 sh """
-                    curl -sf http://${DEPLOY_HOST}:3001/metrics > /dev/null \
-                        || (echo 'METRICS UNAVAILABLE: auth-service' && exit 1)
-                    curl -sf http://${DEPLOY_HOST}:3002/metrics > /dev/null \
-                        || (echo 'METRICS UNAVAILABLE: jobapp-service' && exit 1)
+                    curl -sf http://${DEPLOY_HOST}:4001/metrics > /dev/null \
+                        || (echo 'METRICS UNAVAILABLE: auth-service (prod)' && exit 1)
+                    curl -sf http://${DEPLOY_HOST}:4002/metrics > /dev/null \
+                        || (echo 'METRICS UNAVAILABLE: jobapp-service (prod)' && exit 1)
                     echo 'Metrics endpoints verified.'
                 """
 
@@ -266,7 +266,7 @@ pipeline {
                     echo " Stage 5 Staging : http://localhost:3001  http://localhost:3002"
                     echo " Stage 6 Release : Docker Hub ${DOCKER_HUB_USER}/*:${IMAGE_TAG}"
                     echo "         Prod    : http://localhost:4001  http://localhost:4002"
-                    echo " Stage 7 Metrics : http://localhost:3001/metrics"
+                    echo " Stage 7 Metrics : http://localhost:4001/metrics"
                     echo "         Grafana : http://localhost:3000"
                     echo "============================================================"
                 """
