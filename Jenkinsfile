@@ -266,7 +266,11 @@ pipeline {
                     sed -e 's|\\\${DEPLOY_HOST}|${DEPLOY_HOST}|g' \
                         -e 's|\\\${PROD_PORT_AUTH}|${PROD_PORT_AUTH}|g' \
                         -e 's|\\\${PROD_PORT_JOBAPP}|${PROD_PORT_JOBAPP}|g' \
-                        prometheus/prometheus.template.yml > prometheus/prometheus.yml
+                        prometheus/prometheus.template.yml \
+                        > prometheus/prometheus.yml
+                        echo '=== GENERATED PROMETHEUS CONFIG ==='
+                        cat prometheus/prometheus.yml
+                        ls -la prometheus/
                 """
 
                 sh """
