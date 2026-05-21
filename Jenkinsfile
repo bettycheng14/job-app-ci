@@ -257,6 +257,12 @@ pipeline {
         // and prints a pipeline summary to the console.
         stage('Monitoring') {
             steps {
+                sh '''
+                    if [ -d prometheus/prometheus.yml ]; then
+                        rm -rf prometheus/prometheus.yml
+                    fi
+                '''
+
                 sh """
                     curl -sf http://${DEPLOY_HOST}:4001/metrics > /dev/null \
                         || (echo 'METRICS UNAVAILABLE: auth-service (prod)' && exit 1)
