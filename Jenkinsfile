@@ -79,7 +79,7 @@ pipeline {
         }
 
         // ── STAGE 3: CODE QUALITY ─────────────────────────────────────
-        // Downloads sonar-scanner at runtime — no plugin or local SonarQube needed.
+        // Downloads sonar-scanner at runtime
         // sonar.qualitygate.wait=true polls SonarCloud and exits non-zero on gate
         // failure, blocking deploy/release stages from running.
         stage('Code Quality') {
@@ -174,29 +174,127 @@ pipeline {
         }
 
         // ── STAGE 5: DEPLOY (STAGING) ─────────────────────────────────
+        // Deploys the image built in Stage 1 to staging (no rebuild).
+        // Health checks use host.docker.internal because the containers
+        // run on the host Docker daemon, not inside the Jenkins container.
         stage('Deploy (Staging)') {
             steps {
-                echo 'Deploy (Staging) — to be implemented'
+                sh """
+                    IMAGE_TAG=${IMAGE_TAG} docker compose -f docker-compose.staging.yml up -d
+                """
+
+                sh 'sleep 20'
+
+                sh """
+                    curl -f http://${DEPLOY_HOST}:3001/health \
+                        || (echo 'HEALTH CHECK FAILED: auth-service staging' && exit 1)
+                    curl -f http://${DEPLOY_HOST}:3002/health \
+                        || (echo 'HEALTH CHECK FAILED: jobapp-service staging' && exit 1)
+                    echo 'Staging health checks passed.'
+                """
+            }
+            post {
+                failure {
+                    sh 'docker compose -f docker-compose.staging.yml logs --tail=50 || true'
+                    echo 'DEPLOY FAILED — staging health check failed. Container logs printed above.'
+                }
             }
         }
 
         // ── STAGE 6: RELEASE ──────────────────────────────────────────
+        // Pushes versioned images to Docker Hub, creates a git release tag,
+        // and deploys the exact same image to production.
         stage('Release') {
             steps {
-                echo 'Release — to be implemented'
+                withCredentials([string(credentialsId: 'DOCKER_HUB_TOKEN', variable: 'DOCKER_HUB_TOKEN')]) {
+                    sh """
+                        echo \$DOCKER_HUB_TOKEN | docker login -u ${DOCKER_HUB_USER} --password-stdin
+
+                        docker push ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
+                        docker push ${DOCKER_HUB_USER}/auth-service:latest
+                        docker push ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
+                        docker push ${DOCKER_HUB_USER}/jobapp-service:latest
+
+                        docker logout
+                    """
+                }
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'GITHUB_TOKEN',
+                    usernameVariable: 'GH_USER',
+                    passwordVariable: 'GH_TOKEN'
+                )]) {
+                    sh """
+                        git config user.email 'jenkins@ci.local'
+                        git config user.name  'Jenkins CI'
+                        git tag -a v${IMAGE_TAG} -m 'Release v${IMAGE_TAG} [skip ci]' || true
+                        REMOTE_URL=\$(git remote get-url origin | sed 's|https://|https://\$GH_USER:\$GH_TOKEN@|')
+                        git push \$REMOTE_URL v${IMAGE_TAG} || true
+                    """
+                }
+
+                sh """
+                    IMAGE_TAG=${IMAGE_TAG} docker compose -f docker-compose.prod.yml up -d
+                """
+
+                sh 'sleep 20'
+
+                sh """
+                    curl -f http://${DEPLOY_HOST}:4001/health \
+                        || (echo 'HEALTH CHECK FAILED: auth-service production' && exit 1)
+                    curl -f http://${DEPLOY_HOST}:4002/health \
+                        || (echo 'HEALTH CHECK FAILED: jobapp-service production' && exit 1)
+                    echo 'Production health checks passed.'
+                """
+            }
+            post {
+                failure { echo 'RELEASE FAILED — check Docker Hub credentials and production container logs.' }
             }
         }
 
         // ── STAGE 7: MONITORING ───────────────────────────────────────
+        // Verifies /metrics endpoints are live, starts Prometheus + Grafana,
+        // and prints a pipeline summary to the console.
         stage('Monitoring') {
             steps {
-                echo 'Monitoring — to be implemented'
+                sh """
+                    curl -sf http://${DEPLOY_HOST}:3001/metrics > /dev/null \
+                        || (echo 'METRICS UNAVAILABLE: auth-service' && exit 1)
+                    curl -sf http://${DEPLOY_HOST}:3002/metrics > /dev/null \
+                        || (echo 'METRICS UNAVAILABLE: jobapp-service' && exit 1)
+                    echo 'Metrics endpoints verified.'
+                """
+
+                sh '''
+                    docker compose -f docker-compose.monitoring.yml up -d
+                    sleep 10
+                '''
+
+                sh """
+                    echo ""
+                    echo "============================================================"
+                    echo " PIPELINE SUMMARY — BUILD ${IMAGE_TAG}"
+                    echo "============================================================"
+                    echo " Stage 1 Build   : PASSED — images tagged ${IMAGE_TAG}"
+                    echo " Stage 2 Test    : PASSED — JUnit + coverage published"
+                    echo " Stage 3 Quality : PASSED — SonarCloud quality gate passed"
+                    echo " Stage 4 Security: see archived Trivy/audit reports"
+                    echo " Stage 5 Staging : http://localhost:3001  http://localhost:3002"
+                    echo " Stage 6 Release : Docker Hub ${DOCKER_HUB_USER}/*:${IMAGE_TAG}"
+                    echo "         Prod    : http://localhost:4001  http://localhost:4002"
+                    echo " Stage 7 Metrics : http://localhost:3001/metrics"
+                    echo "         Grafana : http://localhost:3000"
+                    echo "============================================================"
+                """
+            }
+            post {
+                failure { echo 'MONITORING FAILED — /metrics unavailable or monitoring stack failed to start.' }
             }
         }
     }
 
     post {
-        success  { echo 'Pipeline completed successfully.' }
+        success  { echo 'Pipeline completed successfully — all 7 stages passed.' }
         unstable { echo 'UNSTABLE — security findings detected. Review archived reports before promoting.' }
         failure  { echo "Pipeline FAILED. Review stage logs at ${env.BUILD_URL}console" }
     }
