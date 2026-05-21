@@ -1,8 +1,6 @@
 services:
   mongo:
     image: mongo:7
-    ports:
-      - "27018:27017"
     volumes:
       - mongo-prod-data:/data/db
     healthcheck:
