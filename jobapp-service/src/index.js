@@ -1,21 +1,6 @@
 require('dotenv').config();
-const path = require('path');
-const express = require('express');
 const mongoose = require('mongoose');
-
-const applicationRoutes = require('./routes/application');
-
-const app = express();
-app.use(express.json());
-
-// Serve locally saved resumes when GCS is not configured
-if (!process.env.GCS_BUCKET_NAME) {
-  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-}
-
-app.use('/api/applications', applicationRoutes);
-
-app.get('/health', (req, res) => res.json({ status: 'ok', service: 'jobapp' }));
+const app = require('./app');
 
 mongoose
   .connect(process.env.MONGO_URI)
