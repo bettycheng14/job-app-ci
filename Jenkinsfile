@@ -294,7 +294,9 @@ pipeline {
         stage('Deploy (Staging)') {
 
             when {
-                branch 'main'
+                expression {
+                    env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'origin/main' || env.BRANCH_NAME == 'main'
+                }
             }
 
             steps {
@@ -354,7 +356,9 @@ pipeline {
         stage('Release') {
 
             when {
-                branch 'main'
+                expression {
+                    env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'origin/main' || env.BRANCH_NAME == 'main'
+                }
             }
 
             steps {
@@ -512,7 +516,9 @@ pipeline {
         stage('Monitoring') {
 
             when {
-                branch 'main'
+                expression {
+                    env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'origin/main' || env.BRANCH_NAME == 'main'
+                }
             }
 
             steps {
