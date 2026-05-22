@@ -267,14 +267,14 @@ pipeline {
                     sh """
                         trivy image --severity HIGH,CRITICAL \
                             --exit-code 0 \
-                            --format table \
-                            --output trivy-auth-high.txt \
+                            --format json \
+                            --output trivy-auth-high.json \
                             ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
 
                         trivy image --severity HIGH,CRITICAL \
                             --exit-code 0 \
-                            --format table \
-                            --output trivy-jobapp-high.txt \
+                            --format json \
+                            --output trivy-jobapp-high.json \
                             ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
                     """
                 }
