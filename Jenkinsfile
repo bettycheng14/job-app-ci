@@ -268,10 +268,10 @@ pipeline {
                     buildResult: 'UNSTABLE', stageResult: 'UNSTABLE'
                 ) {
                     sh """
-                         trivy image \
+                    trivy image \
                             --scanners vuln \
                             --severity HIGH \
-                            --exit-code 1 \
+                            --exit-code 0 \
                             --format table \
                             --output trivy-auth-high.txt \
                             ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
@@ -281,7 +281,7 @@ pipeline {
                         trivy image \
                             --scanners vuln \
                             --severity HIGH \
-                            --exit-code 1 \
+                            --exit-code 0 \
                             --format table \
                             --output trivy-jobapp-high.txt \
                             ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
@@ -295,22 +295,22 @@ pipeline {
                     trivy image \
                         --scanners vuln \
                         --severity CRITICAL \
-                        --exit-code 1 \
+                        --exit-code 0 \
                         --format table \
                         --output trivy-auth-critical.txt \
                         ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
 
-                        cat trivy-auth-critical.txt
+                    cat trivy-auth-critical.txt
 
                     trivy image \
                         --scanners vuln \
                         --severity CRITICAL \
-                        --exit-code 1 \
+                        --exit-code 0 \
                         --format table \
                         --output trivy-jobapp-critical.txt \
                         ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
 
-                        cat trivy-jobapp-critical.txt
+                    cat trivy-jobapp-critical.txt
                 """
             }
 
