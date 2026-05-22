@@ -405,10 +405,9 @@ pipeline {
                 // GIT TAGGING
                 // ----------------------------------------------------
                 withCredentials([
-                    usernamePassword(
+                    string(
                         credentialsId: 'GITHUB_TOKEN',
-                        usernameVariable: 'GH_USER',
-                        passwordVariable: 'GH_TOKEN'
+                        variable: 'GH_TOKEN'
                     )
                 ]) {
 
@@ -424,7 +423,7 @@ pipeline {
                         fi
 
                         REMOTE_URL=\$(git remote get-url origin | \
-                            sed "s|https://|https://\${GH_USER}:\${GH_TOKEN}@|")
+                            sed "s|https://|https://\${GH_TOKEN}@|")
 
                         git push \$REMOTE_URL v${IMAGE_TAG}
                     """
