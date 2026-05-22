@@ -268,37 +268,49 @@ pipeline {
                     buildResult: 'UNSTABLE', stageResult: 'UNSTABLE'
                 ) {
                     sh """
-                        trivy image \
+                         trivy image \
+                            --scanners vuln \
                             --severity HIGH \
                             --exit-code 1 \
-                            --format json \
-                            --output trivy-auth-high.json \
+                            --format table \
+                            --output trivy-auth-high.txt \
                             ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
 
+                        cat trivy-auth-high.txt
+
                         trivy image \
+                            --scanners vuln \
                             --severity HIGH \
                             --exit-code 1 \
-                            --format json \
-                            --output trivy-jobapp-high.json \
+                            --format table \
+                            --output trivy-jobapp-high.txt \
                             ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
+
+                        cat trivy-jobapp-high.txt
                     """
                 }
 
                 // CRITICAL findings -> fail
                 sh """
                     trivy image \
+                        --scanners vuln \
                         --severity CRITICAL \
                         --exit-code 1 \
-                        --format json \
-                        --output trivy-auth-critical.json \
+                        --format table \
+                        --output trivy-auth-critical.txt \
                         ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
 
+                        cat trivy-auth-critical.txt
+
                     trivy image \
+                        --scanners vuln \
                         --severity CRITICAL \
                         --exit-code 1 \
-                        --format json \
-                        --output trivy-jobapp-critical.json \
+                        --format table \
+                        --output trivy-jobapp-critical.txt \
                         ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
+
+                        cat trivy-jobapp-critical.txt
                 """
             }
 
