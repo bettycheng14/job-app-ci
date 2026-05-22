@@ -193,41 +193,37 @@ pipeline {
                         variable: 'SONAR_TOKEN'
                     )
                 ]) {
+                    sh '''
+                        rm -rf sonar-scanner* sonar-scanner.zip
 
-                    withSonarQubeEnv('SonarCloud') {
+                        ARCH=$(uname -m)
 
-                        sh '''
-                            rm -rf sonar-scanner* sonar-scanner.zip
+                        if [ "$ARCH" = "aarch64" ]; then
+                            SONAR_ZIP="sonar-scanner-cli-8.0.1.6346-linux-aarch64.zip"
+                        else
+                            SONAR_ZIP="sonar-scanner-cli-8.0.1.6346-linux.zip"
+                        fi
 
-                            ARCH=$(uname -m)
+                        curl -fSL -o sonar-scanner.zip \
+                            https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_ZIP}
 
-                            if [ "$ARCH" = "aarch64" ]; then
-                                SONAR_ZIP="sonar-scanner-cli-8.0.1.6346-linux-aarch64.zip"
-                            else
-                                SONAR_ZIP="sonar-scanner-cli-8.0.1.6346-linux.zip"
-                            fi
+                        unzip -qo sonar-scanner.zip
+                        chmod +x sonar-scanner-*/bin/sonar-scanner
 
-                            curl -fSL -o sonar-scanner.zip \
-                                https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/${SONAR_ZIP}
+                        echo "=== SCANNING auth-service ==="
 
-                            unzip -qo sonar-scanner.zip
-                            chmod +x sonar-scanner-*/bin/sonar-scanner
+                        ./sonar-scanner-*/bin/sonar-scanner \
+                            -Dproject.settings=auth-service/sonar-project.properties \
+                            -Dsonar.projectBaseDir=auth-service \
+                            -Dsonar.token=$SONAR_TOKEN
 
-                            echo "=== SCANNING auth-service ==="
+                        echo "=== SCANNING jobapp-service ==="
 
-                            ./sonar-scanner-*/bin/sonar-scanner \
-                                -Dproject.settings=auth-service/sonar-project.properties \
-                                -Dsonar.projectBaseDir=auth-service \
-                                -Dsonar.token=$SONAR_TOKEN
-
-                            echo "=== SCANNING jobapp-service ==="
-
-                            ./sonar-scanner-*/bin/sonar-scanner \
-                                -Dproject.settings=jobapp-service/sonar-project.properties \
-                                -Dsonar.projectBaseDir=jobapp-service \
-                                -Dsonar.token=$SONAR_TOKEN
-                        '''
-                    }
+                        ./sonar-scanner-*/bin/sonar-scanner \
+                            -Dproject.settings=jobapp-service/sonar-project.properties \
+                            -Dsonar.projectBaseDir=jobapp-service \
+                            -Dsonar.token=$SONAR_TOKEN
+                    '''
                 }
             }
 
