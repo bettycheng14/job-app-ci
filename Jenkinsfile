@@ -693,7 +693,7 @@ pipeline {
                             start auth-service || true
                     '''
 
-                    echo 'MONITORING FAILED — check Prometheus/Grafana logs.''
+                    echo 'MONITORING FAILED — check Prometheus/Grafana logs.'
                 }
             }
         }
