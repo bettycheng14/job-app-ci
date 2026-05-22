@@ -424,7 +424,7 @@ pipeline {
                         fi
 
                         REMOTE_URL=\$(git remote get-url origin | \
-                            sed 's|https://|https://\$GH_USER:\$GH_TOKEN@|')
+                            sed "s|https://|https://\${GH_USER}:\${GH_TOKEN}@|")
 
                         git push \$REMOTE_URL v${IMAGE_TAG}
                     """
