@@ -281,7 +281,7 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'trivy-*.json,*-audit-report.json',
+                    archiveArtifacts artifacts: 'trivy-*.txt,trivy-*.json,*-audit-report.json',
                                      allowEmptyArchive: true
                 }
                 failure { echo 'SECURITY FAILED — review archived Trivy and npm audit reports.' }
