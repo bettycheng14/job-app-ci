@@ -263,76 +263,28 @@ pipeline {
                     exit 0
                 '''
 
-                // HIGH findings -> unstable
-                catchError(
-                    buildResult: 'UNSTABLE', stageResult: 'UNSTABLE'
-                ) {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     sh """
-                    trivy image \
-                            --scanners vuln \
-                            --severity HIGH \
+                        trivy image --severity HIGH,CRITICAL \
                             --exit-code 0 \
                             --format table \
                             --output trivy-auth-high.txt \
                             ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
 
-                        cat trivy-auth-high.txt
-
-                        trivy image \
-                            --scanners vuln \
-                            --severity HIGH \
+                        trivy image --severity HIGH,CRITICAL \
                             --exit-code 0 \
                             --format table \
                             --output trivy-jobapp-high.txt \
                             ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
-
-                        cat trivy-jobapp-high.txt
                     """
                 }
-
-                // CRITICAL findings -> fail
-                sh """
-                    trivy image \
-                        --scanners vuln \
-                        --severity CRITICAL \
-                        --exit-code 0 \
-                        --format table \
-                        --output trivy-auth-critical.txt \
-                        ${DOCKER_HUB_USER}/auth-service:${IMAGE_TAG}
-
-                    cat trivy-auth-critical.txt
-
-                    trivy image \
-                        --scanners vuln \
-                        --severity CRITICAL \
-                        --exit-code 0 \
-                        --format table \
-                        --output trivy-jobapp-critical.txt \
-                        ${DOCKER_HUB_USER}/jobapp-service:${IMAGE_TAG}
-
-                    cat trivy-jobapp-critical.txt
-                """
             }
-
             post {
                 always {
-                    archiveArtifacts(
-                        artifacts: '''
-                            *.json,
-                            trivy-*.json,
-                            *-audit-report.json
-                        ''',
-                        allowEmptyArchive: true
-                    )
+                    archiveArtifacts artifacts: 'trivy-*.json,*-audit-report.json',
+                                     allowEmptyArchive: true
                 }
-
-                unstable {
-                    echo 'HIGH SECURITY FINDINGS DETECTED'
-                }
-
-                failure {
-                    echo 'CRITICAL SECURITY FINDINGS DETECTED'
-                }
+                failure { echo 'SECURITY FAILED — review archived Trivy and npm audit reports.' }
             }
         }
 
