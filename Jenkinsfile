@@ -444,17 +444,11 @@ Stages: Build | Test | Code Quality | Security | Staging | Release | Monitoring
 
 Services running:
 
-Auth Service
-http://${DEPLOY_HOST}:${PROD_PORT_AUTH}
-
-JobApp Service
-http://${DEPLOY_HOST}:${PROD_PORT_JOBAPP}
-
 Prometheus
-http://${DEPLOY_HOST}:9090
+http://localhost:9090
 
 Grafana Dashboard with Prometheus data source:
-http://${DEPLOY_HOST}:3000/d/job-app-overview/job-application-platform
+http://localhost:3000/d/job-app-overview/job-application-platform
 Username: admin
 Password: admin
 
