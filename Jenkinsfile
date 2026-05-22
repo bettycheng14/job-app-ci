@@ -427,8 +427,74 @@ pipeline {
     }
 
     post {
-        success  { echo 'Pipeline completed successfully — all 7 stages passed.' }
-        unstable { echo 'UNSTABLE — security findings detected. Review archived reports before promoting.' }
-        failure  { echo "Pipeline FAILED. Review stage logs at ${env.BUILD_URL}console" }
+        success {
+            echo 'Pipeline completed successfully — all 7 stages passed.'
+            mail(
+                to: 'yycbetty14@gmail.com',
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """\
+Pipeline passed — all 7 stages completed.
+
+Job:    ${env.JOB_NAME}
+Build:  #${env.BUILD_NUMBER}
+Tag:    ${env.IMAGE_TAG}
+URL:    ${env.BUILD_URL}
+
+Stages: Build | Test | Code Quality | Security | Staging | Release | Monitoring
+
+Services running:
+
+Auth Service
+http://${DEPLOY_HOST}:${PROD_PORT_AUTH}
+
+JobApp Service
+http://${DEPLOY_HOST}:${PROD_PORT_JOBAPP}
+
+Prometheus
+http://${DEPLOY_HOST}:9090
+
+Grafana Dashboard with Prometheus data source:
+http://${DEPLOY_HOST}:3000/d/job-app-overview/job-application-platform
+Username: admin
+Password: admin
+
+Artifacts:
+${env.BUILD_URL}artifact/
+"""
+            )
+        }
+        unstable {
+            echo 'UNSTABLE — security findings detected. Review archived reports before promoting.'
+            mail(
+                to: 'yycbetty14@gmail.com',
+                subject: "UNSTABLE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """\
+Pipeline completed with warnings (security findings).
+
+Job:    ${env.JOB_NAME}
+Build:  #${env.BUILD_NUMBER}
+Tag:    ${env.IMAGE_TAG}
+URL:    ${env.BUILD_URL}
+
+Action required: Review Trivy and npm audit reports before promoting to production.
+Archived reports: ${env.BUILD_URL}artifact/
+"""
+            )
+        }
+        failure {
+            echo "Pipeline FAILED. Review stage logs at ${env.BUILD_URL}console"
+            mail(
+                to: 'yycbetty14@gmail.com',
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """\
+Pipeline failed.
+
+Job:    ${env.JOB_NAME}
+Build:  #${env.BUILD_NUMBER}
+URL:    ${env.BUILD_URL}
+Logs:   ${env.BUILD_URL}console
+"""
+            )
+        }
     }
 }
